@@ -590,3 +590,38 @@ async def test_unparked_child_turn_is_not_stopped_at_cutoff() -> None:
     assert orch.stats.children_truncated == 0
     assert "corr-kid" in orch._child_to_join
     assert orch.has_pending_branch_work()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gated_turn", [None, 1])
+@pytest.mark.parametrize("offset_ms", [0.0, 4_000_000.0])
+@pytest.mark.parametrize("use_scheduler", [True, False])
+async def test_parent_return_after_cutoff_cannot_park_new_children(
+    gated_turn: int | None, offset_ms: float, use_scheduler: bool
+) -> None:
+    """An in-flight parent may return after the one-shot timer cleanup."""
+    parent = _parent_conv(
+        [
+            _spawn_branch(
+                "b0", ["kid"], start_timestamp_ms=0.0, is_background=gated_turn is None
+            )
+        ],
+        gated_turn=gated_turn,
+    )
+    scheduler = LoopScheduler()
+    orch, _, issuer = _mk_harness(
+        [parent, _child_conv("kid", offset_ms)],
+        scheduler=scheduler if use_scheduler else None,
+    )
+    issuer.dispatch_first_turn.return_value = ChildDispatchResult.REJECTED
+    await _stop_sending(orch, scheduler)
+
+    try:
+        assert await orch.intercept(_mk_credit("parent", "P", 0)) is False
+        assert scheduler.pending_count == 0
+        assert not orch.has_pending_branch_work()
+        assert orch.stats.children_truncated == 1
+        issuer.dispatch_first_turn.assert_not_awaited()
+    finally:
+        scheduler.cancel_all()
+        orch.cleanup()

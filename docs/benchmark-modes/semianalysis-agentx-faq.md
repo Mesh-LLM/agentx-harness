@@ -695,6 +695,12 @@ The run is bounded by `--benchmark-duration` (the scenario requires at least 900
 to 1800). Lanes recycle continuously, so a small dataset is simply replayed more times; the duration,
 not the dataset size, determines how long load is applied.
 
+At the sending cutoff, requests already in flight drain normally. Future child
+dispatches and replay timers are retired, including branches declared by a
+response that arrives after the cutoff. Such unissued children count as
+`children_truncated`; they must not hold an otherwise idle run open for the
+grace period. Accelerated warmup preserves its paused work for profiling instead.
+
 ### Q: How do I scale the offered load up or down?
 Change `--concurrency`. More lanes = more concurrent trees = more prefill and decode pressure and more
 fan-out bursts. Because timing within each session is fixed to the recording, concurrency is your

@@ -945,6 +945,36 @@ async def test_background_worker_chain_runs_after_root_and_drains_cleanly(
     )
 
 
+@pytest.mark.parametrize("concurrency", [1, 2, 4])
+async def test_parent_return_after_cutoff_does_not_create_delayed_branch_work(
+    tmp_path: Path, mock_server_factory: MockServerFactory, concurrency: int
+) -> None:
+    """A slow spawning response crosses the cutoff; its children cannot start."""
+    corpus = _write_delayed_past_cutoff_trace(tmp_path / "traces")
+    async with mock_server_factory(ttft=700.0, itl=0.0, workers=2) as server:
+        result = await _run_weka_profile(
+            input_dir=corpus,
+            artifact_dir=tmp_path / "artifacts",
+            url=server.url,
+            duration=3.0,
+            concurrency=concurrency,
+            extra_args=["--burst-phase-starts"],
+            timeout=60.0,
+        )
+    _assert_success(result, "parent returned after cutoff")
+    records = _profiling_metadata(result)
+    assert len(records) == 3 * concurrency
+    assert {record.turn_index for record in records} == {0, 1, 2}
+    assert all(record.agent_depth == 0 for record in records)
+    assert result.json.branch_stats.children_truncated >= concurrency
+    assert max(record.request_end_ns for record in records) > (
+        min(record.request_start_ns for record in records) + 3_000_000_000
+    ), "at least one spawning response must return after the sending cutoff"
+    log = _combined_log_text(result)
+    assert "grace_period_timeout=True" not in log
+    assert "leaked state at cleanup" not in log
+
+
 async def test_child_delayed_past_duration_cutoff_does_not_hold_phase_for_grace(
     tmp_path: Path, aiperf_mock_server: AIPerfMockServer
 ) -> None:

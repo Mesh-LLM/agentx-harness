@@ -274,6 +274,28 @@ async def test_phase_stop_then_child_completion_drains_join() -> None:
 
 
 @pytest.mark.asyncio
+async def test_parent_reaching_future_join_after_cutoff_does_not_arm_timer() -> None:
+    """Late parent returns must still wait for existing children, not replay time."""
+    scheduler = LoopScheduler()
+    orch, issuer, _ = _timed_join_orchestrator(scheduler=scheduler)
+    credit = _mk_credit("root", "corr-root", 0)
+    await orch._spawn_children_and_register_gates(credit, ["root:0"])
+    assert "corr-root" in orch._future_joins
+    assert scheduler.pending_count == 0
+    issuer.dispatch_join_turn.return_value = False
+
+    await orch.expire_replay_deadlines()
+    assert orch._maybe_suspend_parent(credit) is True
+    assert scheduler.pending_count == 0
+    assert orch.has_pending_branch_work()
+    issuer.dispatch_join_turn.assert_not_awaited()
+
+    await orch.on_child_leaf_reached("corr-child")
+    issuer.dispatch_join_turn.assert_awaited_once()
+    assert not orch.has_pending_branch_work()
+
+
+@pytest.mark.asyncio
 async def test_snapshot_join_uses_absolute_replay_offset_and_child_gate() -> None:
     """A parent already blocked at t* keeps its profiling-relative deadline."""
     cs = _mk_source(_timed_k1_metadata())

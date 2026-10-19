@@ -304,6 +304,9 @@ class BranchOrchestrator:
         self._overlap_dispatched_branches: set[tuple[str, str]] = set()
         self._fail_fast = Environment.DAG.FAIL_FAST
         self._cleaning_up: bool = False
+        # Timer cleanup is a permanent phase boundary. In-flight responses
+        # can still declare branches afterwards, but cannot create new waits.
+        self._replay_deadlines_expired = False
         # SPAWN children whose recorded first request starts after the branch
         # spawn dispatch through the shared replay scheduler (see
         # _start_delayed_first_turn), so the system-idle cap can advance those
@@ -1036,6 +1039,11 @@ class BranchOrchestrator:
         # retain it so their joins survive phase handoff.
         immediate_children: list = []
         for child in all_children:
+            if self._replay_deadlines_expired:
+                self._rollback_failed_first_turn(
+                    child, ChildDispatchResult.REJECTED, parent_corr
+                )
+                continue
             offset_ms = dispatch_offset_by_corr.get(child.x_correlation_id, 0.0)
             if self._accelerated_warmup_started:
                 offset_ms = 0.0
@@ -1480,7 +1488,7 @@ class BranchOrchestrator:
         # time and child completion -- but its replay-time condition is
         # immediately ready in zero-idle warmup. Child completion is still
         # mandatory, so this cannot release a parent ahead of its subagents.
-        if self._accelerated_warmup_started:
+        if self._accelerated_warmup_started or self._replay_deadlines_expired:
             delay_ms = 0.0
         if delay_ms <= 0.0 or self._scheduler is None:
             pending.replay_deadline_elapsed = True
@@ -1584,6 +1592,7 @@ class BranchOrchestrator:
         Delayed child dispatches cancelled at the same boundary are rolled
         back first so the joins they gated can drain.
         """
+        self._replay_deadlines_expired = True
         await self._abandon_cancelled_child_dispatches()
         releasable: list[PendingBranchJoin] = []
         for parent_corr, pending in list(self._active_joins.items()):
