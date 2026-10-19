@@ -1039,14 +1039,14 @@ class BranchOrchestrator:
         # retain it so their joins survive phase handoff.
         immediate_children: list = []
         for child in all_children:
-            if self._replay_deadlines_expired:
+            offset_ms = dispatch_offset_by_corr.get(child.x_correlation_id, 0.0)
+            if self._accelerated_warmup_started:
+                offset_ms = 0.0
+            if self._replay_deadlines_expired and offset_ms > 0.0:
                 self._rollback_failed_first_turn(
                     child, ChildDispatchResult.REJECTED, parent_corr
                 )
                 continue
-            offset_ms = dispatch_offset_by_corr.get(child.x_correlation_id, 0.0)
-            if self._accelerated_warmup_started:
-                offset_ms = 0.0
             if offset_ms > 0.0:
                 self._start_delayed_first_turn(child, offset_ms, parent_corr)
             else:

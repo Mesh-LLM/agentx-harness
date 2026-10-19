@@ -621,7 +621,24 @@ async def test_parent_return_after_cutoff_cannot_park_new_children(
         assert scheduler.pending_count == 0
         assert not orch.has_pending_branch_work()
         assert orch.stats.children_truncated == 1
-        issuer.dispatch_first_turn.assert_not_awaited()
+        if offset_ms > 0.0:
+            issuer.dispatch_first_turn.assert_not_awaited()
+        else:
+            issuer.dispatch_first_turn.assert_awaited_once()
     finally:
         scheduler.cancel_all()
         orch.cleanup()
+
+
+@pytest.mark.asyncio
+async def test_cutoff_preserves_issuer_admission_for_immediate_children() -> None:
+    """A root-session quota does not prohibit already admitted DAG children."""
+    parent = _parent_conv([_spawn_branch("b0", ["kid"], start_timestamp_ms=0.0)])
+    orch, _, issuer = _mk_harness([parent, _child_conv("kid", 0.0)])
+    await orch.expire_replay_deadlines()
+    await orch.intercept(_mk_credit("parent", "P", 0))
+    issuer.dispatch_first_turn.assert_awaited_once()
+    assert orch.has_pending_branch_work()
+    assert orch.stats.children_truncated == 0
+    await orch.on_child_leaf_reached("corr-kid")
+    assert not orch.has_pending_branch_work()
