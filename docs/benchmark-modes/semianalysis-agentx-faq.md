@@ -579,6 +579,14 @@ to the matching profiling turn — you measure a warm cache, not a cache the mar
 Recycled and freshly-started sessions get fresh markers, so a recycled session can never accidentally
 reuse a warmed-up session's cached prefix.
 
+### Q: Can two independent engine runs receive identical cache-bust markers?
+Yes. In a YAML workload, set the same `dataset.cache_bust.namespace` for both runs, alongside the
+same trace selection, trajectory order, and cache-bust target. The namespace replaces only the
+run-specific benchmark ID in the marker digest; each trajectory tree and recycled play still gets
+its own marker. Leave `namespace` unset to keep the default per-run isolation. Use a distinct
+namespace when the workload changes, and start each engine with a fresh server cache when comparing
+them.
+
 ### Q: Where is the marker placed in the prompt?
 The AgentX scenario places it as a **first-turn prefix**. On the wire it is a short literal token —
 `[rid:<12 hex chars>]` plus a blank line — prepended to the session's first user message, so you can

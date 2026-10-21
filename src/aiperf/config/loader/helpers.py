@@ -101,6 +101,19 @@ class BenchmarkHelpersMixin:
             return cache_bust.target
         return CacheBustTarget.NONE
 
+    def get_cache_bust_namespace(self) -> str | None:
+        """Resolve an explicit marker namespace for comparable agentic runs."""
+        dataset = self.get_default_dataset()
+        prompts = getattr(dataset, "prompts", None)
+        if prompts is not None:
+            cache_bust = getattr(prompts, "cache_bust", None)
+            if cache_bust is not None:
+                return cache_bust.namespace
+        cache_bust = getattr(dataset, "cache_bust", None)
+        if cache_bust is not None:
+            return cache_bust.namespace
+        return None
+
     def get_prompt_corpus(self) -> PromptCorpus | None:
         """Resolve the active dataset's authored ``prompts.corpus``."""
         dataset = self.get_default_dataset()

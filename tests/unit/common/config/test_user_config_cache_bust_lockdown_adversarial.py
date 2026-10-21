@@ -206,3 +206,34 @@ def test_cache_bust_all_targets_construct_with_chat_endpoint_and_agentic_replay(
     assert cfg.get_cache_bust_target() == target
     assert cfg.endpoint.type == endpoint_type
     assert cfg.get_profiling_phases()[0].timing_mode == TimingMode.AGENTIC_REPLAY
+
+
+def test_file_dataset_exposes_explicit_cache_bust_namespace() -> None:
+    cfg = BenchmarkConfig.model_validate(
+        {
+            "models": ["test-model"],
+            "endpoint": {"urls": [_URL], "type": EndpointType.CHAT},
+            "datasets": [
+                {
+                    "name": "main",
+                    "type": "file",
+                    "path": "/fake/trace.jsonl",
+                    "format": "weka_trace",
+                    "cache_bust": {
+                        "target": CacheBustTarget.FIRST_TURN_PREFIX,
+                        "namespace": "agentx-fixed-cohort-v1",
+                    },
+                }
+            ],
+            "phases": [
+                {
+                    "name": "profiling",
+                    "type": "concurrency",
+                    "concurrency": 1,
+                    "requests": 1,
+                    "timing_mode": TimingMode.AGENTIC_REPLAY,
+                }
+            ],
+        }
+    )
+    assert cfg.get_cache_bust_namespace() == "agentx-fixed-cohort-v1"
