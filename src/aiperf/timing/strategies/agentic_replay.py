@@ -232,13 +232,12 @@ class AgenticReplayStrategy(AIPerfLoggerMixin):
         self._cache_bust_target: CacheBustTarget = (
             run.cfg.get_cache_bust_target() if run is not None else CacheBustTarget.NONE
         )
+        self._benchmark_id: str = run.benchmark_id if run is not None else "unknown"
         namespace = run.cfg.get_cache_bust_namespace() if run is not None else None
         self._cache_bust_namespace: str = (
             namespace
             if isinstance(namespace, str) and namespace
-            else run.benchmark_id
-            if run is not None
-            else "unknown"
+            else self._benchmark_id
         )
         # ``--burst-phase-starts`` (BasePhaseConfig.burst_phase_starts on the
         # profiling phase). Default False: WARMUP is globally t*-aligned and
