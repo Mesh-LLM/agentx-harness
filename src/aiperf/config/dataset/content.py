@@ -64,10 +64,10 @@ class CacheBustConfig(BaseConfig):
     Prefix variants diverge at token 0 (defeats KV-cache prefix matching for
     the entire prompt -- recommended when shared_system_length is large).
     Suffix variants append after existing content (lighter bust; preserves
-    leading-prefix caching). Marker is deterministic from
-    (benchmark_id, recycle_pass, trajectory_index) -- reproducible across
-    reruns. Same marker for all turns within a conversation; fresh marker
-    on each recycle of a trace_id.
+    leading-prefix caching). Marker is deterministic from the optional
+    namespace (or the run ID), recycle pass, trajectory index, and trace ID.
+    Same marker for all turns within a conversation; fresh marker on each
+    recycle of a trace ID.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -83,6 +83,20 @@ class CacheBustConfig(BaseConfig):
                 "Prefix variants prepend at token 0 (most aggressive); "
                 "suffix variants append after existing content. "
                 "'none' disables the feature (default)."
+            ),
+        ),
+    ]
+
+    namespace: Annotated[
+        str | None,
+        Field(
+            default=None,
+            min_length=1,
+            description=(
+                "Stable cache-bust namespace shared by comparable runs. "
+                "When unset, the unique benchmark ID isolates each run. "
+                "Distinct trajectory trees and recycled plays still receive "
+                "distinct markers within a namespace."
             ),
         ),
     ]

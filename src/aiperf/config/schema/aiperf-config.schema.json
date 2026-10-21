@@ -10828,12 +10828,26 @@
     },
     "CacheBustConfig": {
       "additionalProperties": false,
-      "description": "Per-conversation cache-bust marker injected into the prompt.\n\nPrefix variants diverge at token 0 (defeats KV-cache prefix matching for\nthe entire prompt -- recommended when shared_system_length is large).\nSuffix variants append after existing content (lighter bust; preserves\nleading-prefix caching). Marker is deterministic from\n(benchmark_id, recycle_pass, trajectory_index) -- reproducible across\nreruns. Same marker for all turns within a conversation; fresh marker\non each recycle of a trace_id.",
+      "description": "Per-conversation cache-bust marker injected into the prompt.\n\nPrefix variants diverge at token 0 (defeats KV-cache prefix matching for\nthe entire prompt -- recommended when shared_system_length is large).\nSuffix variants append after existing content (lighter bust; preserves\nleading-prefix caching). Marker is deterministic from the optional\nnamespace (or the run ID), recycle pass, trajectory index, and trace ID.\nSame marker for all turns within a conversation; fresh marker on each\nrecycle of a trace ID.",
       "properties": {
         "target": {
           "$ref": "#/$defs/CacheBustTarget",
           "default": "none",
           "description": "Where (and how) to inject a per-conversation cache-bust marker. Prefix variants prepend at token 0 (most aggressive); suffix variants append after existing content. 'none' disables the feature (default)."
+        },
+        "namespace": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stable cache-bust namespace shared by comparable runs. When unset, the unique benchmark ID isolates each run. Distinct trajectory trees and recycled plays still receive distinct markers within a namespace.",
+          "title": "Namespace"
         }
       },
       "title": "CacheBustConfig",

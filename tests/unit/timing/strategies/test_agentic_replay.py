@@ -3122,7 +3122,12 @@ async def test_warmup_skips_mark_sending_complete_when_already_complete():
 _RID_RE = re.compile(r"\[rid:[0-9a-f]{12}\]")
 
 
-def _make_run(*, target: CacheBustTarget, benchmark_id: str = "bench-fixed"):
+def _make_run(
+    *,
+    target: CacheBustTarget,
+    benchmark_id: str = "bench-fixed",
+    namespace: str | None = None,
+):
     """Build a v2 ``BenchmarkRun`` exposing the cache-bust target (on the synthetic dataset's ``prompts.cache_bust.target``) and ``benchmark_id`` the strategy reads."""
     from aiperf.config import BenchmarkConfig, BenchmarkRun
 
@@ -3138,7 +3143,9 @@ def _make_run(*, target: CacheBustTarget, benchmark_id: str = "bench-fixed"):
                 {
                     "name": "default",
                     "type": "synthetic",
-                    "prompts": {"cache_bust": {"target": target}},
+                    "prompts": {
+                        "cache_bust": {"target": target, "namespace": namespace}
+                    },
                 }
             ],
             "phases": [
@@ -3165,6 +3172,30 @@ def _extract_rid(marker: str | None) -> str | None:
         return None
     m = _RID_RE.search(marker)
     return m.group(0) if m else None
+
+
+def test_cache_bust_namespace_matches_across_independent_runs():
+    trajectories = [Trajectory(conversation_id="trace_0", start_turn_index=0)]
+
+    def marker(benchmark_id: str, namespace: str | None) -> str | None:
+        run = _make_run(
+            target=CacheBustTarget.FIRST_TURN_PREFIX,
+            benchmark_id=benchmark_id,
+            namespace=namespace,
+        )
+        assert run.cfg.get_cache_bust_namespace() == namespace
+        strategy, _, _, _ = _make_strategy(
+            phase=CreditPhase.PROFILING,
+            trajectories=trajectories,
+            run=run,
+        )
+        return strategy._mint_marker_for_session("root", "trace_0", 0)
+
+    first = marker("run-a", "shared-workload")
+    assert first is not None
+    assert marker("run-b", "shared-workload") == first
+    assert marker("run-b", "different-workload") != first
+    assert marker("run-a", None) != marker("run-b", None)
 
 
 @pytest.mark.asyncio
